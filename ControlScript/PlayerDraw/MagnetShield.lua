@@ -14,7 +14,7 @@ local assets = script.Parent.Parent:WaitForChild("Assets")
 local models = assets:WaitForChild("Models")
 
 --Constructor and destructor
-function draw_magnet_shield:New(hrp, holder)
+function draw_magnet_shield:New(holder)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = draw_magnet_shield})
 	
@@ -49,12 +49,6 @@ function draw_magnet_shield:New(hrp, holder)
 			table.insert(self.shield3c, v)
 		end
 	end
-	
-	--Weld
-	self.weld = Instance.new("Weld")
-	self.weld.Part0 = hrp
-	self.weld.Part1 = self.shield.PrimaryPart
-	self.weld.Parent = self.shield.PrimaryPart
 	
 	--Initialize time
 	self.time = 0
@@ -92,55 +86,35 @@ function draw_magnet_shield:Draw(dt, hrp_cf)
 	local trans3 = GetTransparency(self.time, 0.666)
 	
 	--Apply shield transparencies
-	if trans1 ~= self.trans1 then
-		for _,v in pairs(self.shield1c) do
-			v.Transparency = trans1
-		end
-		local beam1 = trans1 < 0.75
-		if beam1 ~= self.beam1 then
-			for _,v in pairs(self.shield1b) do
-				v.Enabled = beam1
-			end
-			self.beam1 = beam1
-		end
-		self.trans1 = trans1
+	for _,v in pairs(self.shield1c) do
+		v.Transparency = trans1
+	end
+	for _,v in pairs(self.shield1b) do
+		v.Enabled = trans1 < 0.75
 	end
 	
-	if trans2 ~= self.trans2 then
-		for _,v in pairs(self.shield2c) do
-			v.Transparency = trans2
-		end
-		local beam2 = trans2 < 0.75
-		if beam2 ~= self.beam2 then
-			for _,v in pairs(self.shield2b) do
-				v.Enabled = beam2
-			end
-			self.beam2 = beam2
-		end
-		self.trans2 = trans2
+	for _,v in pairs(self.shield2c) do
+		v.Transparency = trans2
+	end
+	for _,v in pairs(self.shield2b) do
+		v.Enabled = trans2 < 0.75
 	end
 	
-	if trans3 ~= self.trans3 then
-		for _,v in pairs(self.shield3c) do
-			v.Transparency = trans3
-		end
-		local beam3 = trans3 < 0.75
-		if beam3 ~= self.beam3 then
-			for _,v in pairs(self.shield3b) do
-				v.Enabled = beam3
-			end
-			self.beam3 = beam3
-		end
-		self.trans3 = trans3
+	for _,v in pairs(self.shield3c) do
+		v.Transparency = trans3
+	end
+	for _,v in pairs(self.shield3b) do
+		v.Enabled = trans3 < 0.75
 	end
 	
 	--Set shield CFrame
 	self.rot *= CFrame.Angles(dt * 0.16, dt * 0.21, dt * 0.19)
-	self.weld.C0 = (hrp_cf - hrp_cf.p):inverse() * self.rot
+	self.shield:SetPrimaryPartCFrame(CFrame.new(hrp_cf.p) * self.rot)
 end
 
 function draw_magnet_shield:LazyDraw(dt, hrp_cf)
-	
+	--Set shield CFrame
+	self.shield:SetPrimaryPartCFrame(CFrame.new(hrp_cf.p))
 end
 
 return draw_magnet_shield

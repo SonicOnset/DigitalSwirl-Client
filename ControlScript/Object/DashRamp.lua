@@ -39,11 +39,11 @@ local function TouchPlayer(self, player)
 		player:ResetObjectState()
 		if player.v3 ~= true then
 			player.spd = Vector3.new((self.power / 60) / player.p.scale, (self.power / 60) / player.p.scale / 1.5, 0)
-			player.dashpanel_timer = self.nocon_time * constants.framerate
+			player.dashpanel_timer = self.nocon_time * 60
 		else
 			player.spd = player:PosToSpd(player:ToLocal(vector.Flatten(player:ToGlobal(player.spd), self.root.CFrame.UpVector)) + (self.root.CFrame.UpVector * (self.power / 60) / player.p.scale / 1.5))
 		end
-		player.state = "Airborne"
+		player.state = constants.state.airborne
 		player:ExitBall()
 		player.animation = "DashRamp"
 		

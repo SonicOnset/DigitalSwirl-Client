@@ -48,19 +48,19 @@ local function TouchPlayer(self, player)
 		--Align player with spring and set speed
 		player.pos = self.root.Position
 		if player.v3 ~= true then
-			player.spd = Vector3.new(0, (self.power / constants.framerate) / player.p.scale, 0)
+			player.spd = Vector3.new(0, (self.power / 60) / player.p.scale, 0)
 		else
-			player.spd = player:ToLocal(Vector3.new(0, (self.power / constants.framerate) / player.p.scale, 0))
+			player.spd = player:ToLocal(Vector3.new(0, (self.power / 60) / player.p.scale, 0))
 		end
 		
 		--Set spring state and make airborne
-		player.state = "Airborne"
+		player.state = constants.state.airborne
 		player.flag.grounded = false
 		player:ExitBall()
 		player:ResetObjectState()
 		player.flag.air_kick = true
 		if player.v3 ~= true then
-			player.spring_timer = self.nocon_time * constants.framerate
+			player.spring_timer = self.nocon_time * 60
 			player.flag.scripted_spring = self.scripted
 		end
 		player.animation = "SpringStart"

@@ -16,7 +16,7 @@ local common_modules = replicated_storage:WaitForChild("CommonModules")
 local cframe = require(common_modules:WaitForChild("CFrame"))
 
 --Constructor and destructor
-function draw_ball_trail:New(hrp, holder, models)
+function draw_ball_trail:New(holder, models)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = draw_ball_trail})
 	
@@ -27,15 +27,8 @@ function draw_ball_trail:New(hrp, holder, models)
 	self.ball_trails = self.ball_trail:WaitForChild("Trail"):GetChildren()
 	self.ball_trail.Parent = self.holder
 	
-	--Weld
-	self.weld = Instance.new("Weld")
-	self.weld.Part0 = hrp
-	self.weld.Part1 = self.ball_trail
-	self.weld.Parent = self.ball_trail
-	
 	--Initialize state
 	self.enabled = false
-	self.rot = CFrame.new()
 	self.hrp_cf = nil
 	
 	return self
@@ -71,9 +64,9 @@ function draw_ball_trail:Draw(hrp_cf)
 		
 		local trail_cf
 		if enabled then
-			trail_cf = self.rot
+			trail_cf = self.ball_trail.CFrame
 		else
-			trail_cf = hrp_cf - hrp_cf.p
+			trail_cf = hrp_cf
 		end
 		
 		if new_pos ~= prev_pos then
@@ -82,13 +75,13 @@ function draw_ball_trail:Draw(hrp_cf)
 			if look_dir:Dot(diff_dir) < 0 then
 				diff_dir *= -1
 			end
-			local new_ang = cframe.FromToRotation(look_dir, diff_dir) * trail_cf
+			local new_ang = cframe.FromToRotation(look_dir, diff_dir) * (trail_cf - trail_cf.p)
 			trail_cf = new_ang + new_pos
 		else
-			trail_cf = trail_cf + new_pos
+			trail_cf = (trail_cf - trail_cf.p) + new_pos
 		end
 		
-		self.weld.C0 = hrp_cf:inverse() * trail_cf
+		self.ball_trail.CFrame = trail_cf
 		self.hrp_cf = hrp_cf
 	end
 end

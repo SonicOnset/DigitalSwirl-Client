@@ -17,8 +17,6 @@ local vector = require(common_modules:WaitForChild("Vector"))
 local collision = require(common_modules:WaitForChild("Collision"))
 local global_reference = require(common_modules:WaitForChild("GlobalReference"))
 
-local constants = require(script.Parent.Parent:WaitForChild("Constants"))
-
 local collision_reference = global_reference:New(workspace, "Level/Map/Collision")
 
 local assets = script.Parent.Parent:WaitForChild("Assets")
@@ -196,7 +194,7 @@ function spilled_ring:New(object)
 	
 	--Set state
 	self.time = 0
-	self.spd = self.root.Velocity / constants.framerate
+	self.spd = self.root.Velocity / 60
 	self.sub_spd = nil
 	self.collected = false
 	

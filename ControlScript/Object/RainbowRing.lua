@@ -42,14 +42,14 @@ local function TouchPlayer(self, player)
 		--Move player to rainbow ring and set speed
 		player:SetAngle(player:AngleFromRbx(self.og_cf - self.og_cf.p))
 		player.pos = self.root.Position - (player:GetUp() * (player.p.height * player.p.scale))
-		player.spd = Vector3.new((self.power / constants.framerate) / player.p.scale, 0, 0)
+		player.spd = Vector3.new((self.power / 60) / player.p.scale, 0, 0)
 		
 		--Set rainbow ring state and make airborne
-		player.state = "Airborne"
+		player.state = constants.state.airborne
 		player.flag.grounded = false
 		player:ExitBall()
 		player:ResetObjectState()
-		player.dashring_timer = self.nocon_time * constants.framerate
+		player.dashring_timer = self.nocon_time * 60
 		player.animation = "RainbowRing"
 		player.reset_anim = true
 		

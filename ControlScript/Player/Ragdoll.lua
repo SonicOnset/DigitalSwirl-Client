@@ -10,6 +10,8 @@ Author(s): Regan "CuckyDev/TheGreenDeveloper" Green
 
 local player_ragdoll = {}
 
+local constants = require(script.Parent.Parent:WaitForChild("Constants"))
+
 local sound = require(script.Parent:WaitForChild("Sound"))
 
 function player_ragdoll.Bounce(self, pspd, nspd)
@@ -18,9 +20,9 @@ function player_ragdoll.Bounce(self, pspd, nspd)
 	self.spd = self:ToLocal(nspd + diff * (0.5 + math.random() * 0.35))
 	
 	--Enter ragdoll if bounced hard
-	if diff.magnitude > 6 and self.state ~= "Ragdoll" then
+	if diff.magnitude > 6 and self.state ~= constants.state.ragdoll then
 		--Enter ragdoll state
-		self.do_ragdoll = true--self.state = "Ragdoll"
+		self.do_ragdoll = true--self.state = constants.state.ragdoll
 		self.ragdoll_time = 0
 		sound.PlaySound(self, "Trip")
 	end

@@ -17,6 +17,13 @@ function player_sound.LoadSounds(self)
 	--Unload previous sounds
 	player_sound.UnloadSounds(self)
 	
+	--Create new sound source
+	self.sound_source = Instance.new("Part")
+	self.sound_source.Name = "SoundSource"
+	self.sound_source.Anchored = true
+	self.sound_source.Transparency = 1
+	self.sound_source.Parent = self.character
+	
 	--Load sounds
 	self.sounds = {}
 	self.sound_volume = {}
@@ -25,7 +32,7 @@ function player_sound.LoadSounds(self)
 		if v:IsA("Sound") then
 			--Create new sound object and parent to sound source
 			local new_snd = v:Clone()
-			new_snd.Parent = self.hrp
+			new_snd.Parent = self.sound_source or self.hrp
 			
 			--Register new sound
 			self.sounds[v.Name] = new_snd
@@ -41,6 +48,12 @@ function player_sound.UnloadSounds(self)
 			v:Destroy()
 		end
 		self.sounds = nil
+	end
+	
+	--Destroy sound source
+	if self.sound_source ~= nil then
+		self.sound_source:Destroy()
+		self.sound_source = nil
 	end
 end
 
@@ -69,6 +82,12 @@ function player_sound.SetSoundPitch(self, name, pitch)
 	--Set sound's pitch if exists
 	if self.sounds[name] ~= nil then
 		self.sounds[name].Pitch = pitch
+	end
+end
+
+function player_sound.UpdateSource(self)
+	if self.hrp ~= nil and self.sound_source ~= nil then
+		self.sound_source.CFrame = self.hrp.CFrame
 	end
 end
 

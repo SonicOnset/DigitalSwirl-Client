@@ -12,7 +12,6 @@ local player_draw = {}
 
 local replicated_storage = game:GetService("ReplicatedStorage")
 local common_modules = replicated_storage:WaitForChild("CommonModules")
-local assets = replicated_storage:WaitForChild("Assets")
 
 local switch = require(common_modules:WaitForChild("Switch"))
 local camera_util = require(common_modules:WaitForChild("CameraUtil"))
@@ -24,38 +23,42 @@ local shield_model = require(script:WaitForChild("Shield"))
 local magnet_shield_model = require(script:WaitForChild("MagnetShield"))
 local invincibility = require(script:WaitForChild("Invincibility"))
 
-local characters = assets:WaitForChild("Characters")
-
 --Constants
 local draw_rad = 10
 
 --Constructor and destructor
-function player_draw:New(character, name)
+function player_draw:New(character)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = player_draw})
 	
-	--Create character
-	local char_folder = characters:FindFirstChild(character)
-	if char_folder ~= nil then
-		local char_model = char_folder:FindFirstChild("Character")
-		if char_model ~= nil then
-			self.character = char_model:Clone()
-			self.character.Name = name
-			self.character.Parent = workspace
-		end
-	end
-	
-	--Get character's info
+	--Load character's info
 	local info
 	if character ~= nil then
+		self.character = character
 		info = require(self.character:WaitForChild("CharacterInfo"))
 	else
-		error("Player can't be created without character")
+		error("Player draw can't be created without character")
 		return nil
 	end
 	
 	--Find common character references
 	self.hrp = self.character:WaitForChild("HumanoidRootPart")
+	
+	--Create model holder
+	self.model_holder = Instance.new("Model")
+	self.model_holder.Name = character.Name
+	self.model_holder.Parent = workspace.CurrentCamera
+	
+	--Create model instances
+	local models = info.assets:WaitForChild("Models")
+	
+	self.jump_ball = jump_ball:New(self.model_holder, models)
+	self.spindash_ball = spindash_ball:New(self.model_holder, models)
+	self.ball_trail = ball_trail:New(self.model_holder, models)
+	
+	self.shield_model = shield_model:New(self.model_holder)
+	self.magnet_shield_model = magnet_shield_model:New(self.model_holder)
+	self.invincibility = invincibility:New(self.model_holder)
 	
 	--Get parts to hide when in a ball
 	self.parts = {}
@@ -65,24 +68,13 @@ function player_draw:New(character, name)
 		end
 	end
 	
-	--Create model instances
-	local models = info.assets:WaitForChild("Models")
-	
-	self.jump_ball = jump_ball:New(self.hrp, self.character, models)
-	self.spindash_ball = spindash_ball:New(self.hrp, self.character, models)
-	self.ball_trail = ball_trail:New(self.hrp, self.character, models)
-	
-	self.shield_model = shield_model:New(self.hrp, self.character)
-	self.magnet_shield_model = magnet_shield_model:New(self.hrp, self.character)
-	self.invincibility = invincibility:New(self.hrp, self.character)
-	
 	--Initialize draw state
+	self.vis = 0
 	self.cframe = self.hrp.CFrame
 	self.ball = nil
 	self.shield = nil
 	self.invincible = false
 	self.trail_active = false
-	self.blink = 0
 	self.blinking = false
 	
 	return self
@@ -115,10 +107,10 @@ function player_draw:Destroy()
 		self.invincibility = nil
 	end
 	
-	--Destroy character model
-	if self.character ~= nil then
-		self.character:Destroy()
-		self.character = nil
+	--Destroy model holder
+	if self.model_holder ~= nil then
+		self.model_holder:Destroy()
+		self.model_holder = nil
 	end
 end
 
@@ -139,26 +131,24 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 		--Don't render player if not in frustum
 		local not_cull = camera_util.CheckFrustum(hrp_cf.p, draw_rad)
 		
+		--Update character and model CFrame
+		if hrp_cf ~= self.cframe then
+			--Update character CFrame
+			local prev_pos = self.cframe ~= nil and self.cframe.p or hrp_cf.p
+			self.hrp.CFrame = hrp_cf
+		end
+		
 		--Blink character
 		local force_ball = nil
-		if ball ~= nil then
-			if blinking then
-				self.blink = (self.blink < 0.5) and 1 or 0
-				ApplyVisible(self, 1)
-				force_ball = self.blink < 0.5
-			elseif self.blinking then
-				ApplyVisible(self, 1)
-				force_ball = true
-			end
-		else
-			if blinking then
-				self.blink = 1 - self.blink
-				ApplyVisible(self, self.blink)
-			elseif self.blinking then
-				ApplyVisible(self, 0)
-			end
+		if blinking then
+			self.vis =  (self.ball ~= nil) and 1 or (1 - self.vis)
+			ApplyVisible(self, self.vis)
+			force_ball = self.vis < 0.5
+		elseif blinking ~= self.blinking then
+			self.vis = (self.ball ~= nil) and 1 or 0
+			ApplyVisible(self, self.vis)
+			force_ball = self.ball ~= nil
 		end
-		self.blinking = blinking
 		
 		--Update ball
 		if ball ~= self.ball or force_ball ~= nil then
@@ -175,7 +165,13 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 			end
 			
 			--Enable new ball
-			if ball ~= nil and force_ball ~= false then
+			if ball ~= nil or force_ball == true then
+				if force_ball == nil then
+					--Make character invisible
+					ApplyVisible(self, 1)
+					self.vis = 1
+				end
+				
 				--Enable new ball
 				switch(ball, {}, {
 					["JumpBall"] = function()
@@ -185,18 +181,16 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 						self.spindash_ball:Enable()
 					end,
 				})
+			else
+				if force_ball == nil then
+					--Make character visible
+					ApplyVisible(self, 0)
+					self.vis = 0
+				end
 			end
-			
-			--Hide character
-			if force_ball == nil then
-				--Make character visible
-				ApplyVisible(self, (ball ~= nil) and 1 or 0)
-			end
-			
-			self.ball = ball
 		end
 		
-		if ball ~= nil and force_ball ~= false then
+		if ball ~= nil then
 			switch(ball, {}, {
 				["JumpBall"] = function()
 					if not_cull then
@@ -222,7 +216,6 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 			else
 				self.ball_trail:Disable()
 			end
-			self.trail_active = trail_active
 		end
 		
 		if not_cull then
@@ -256,7 +249,6 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 					end,
 				})
 			end
-			self.shield = shield
 		end
 		
 		if shield ~= nil then
@@ -288,7 +280,6 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 			else
 				self.invincibility:Disable()
 			end
-			self.invincible = invincible
 		end
 		
 		if not_cull then
@@ -297,11 +288,14 @@ function player_draw:Draw(dt, hrp_cf, ball, ball_spin, trail_active, shield, inv
 			self.invincibility:LazyDraw(dt, hrp_cf)
 		end
 		
-		--Update character CFrame
-		if hrp_cf ~= self.cframe then
-			self.hrp.CFrame = hrp_cf
-			self.cframe = hrp_cf
-		end
+		--Use given state
+		self.cframe = hrp_cf
+		self.ball = ball
+		self.ball_spin = ball_spin
+		self.invincible = invincible
+		self.trail_active = trail_active
+		self.shield = shield
+		self.blinking = blinking
 	end
 	
 	debug.profileend()

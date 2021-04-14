@@ -15,6 +15,7 @@ local footstep_sounds = script.Parent:WaitForChild("FootstepSounds")
 local replicated_storage = game:GetService("ReplicatedStorage")
 local common_modules = replicated_storage:WaitForChild("CommonModules")
 
+local constants = require(script.Parent.Parent:WaitForChild("Constants"))
 local collision = require(common_modules:WaitForChild("Collision"))
 local switch = require(common_modules:WaitForChild("Switch"))
 local rail = require(script.Parent:WaitForChild("Rail"))
@@ -137,10 +138,10 @@ local function AttachEvents(self, anim)
 	if character ~= nil then
 		--Footstep
 		anim:GetMarkerReachedSignal("LStep"):Connect(function()
-			AnimFootstep(self, anim, Vector3.new(-0.75, -self.p.hip_height, 0))
+			AnimFootstep(self, anim, Vector3.new(-0.75, -self:GetCharacterYOff(), 0))
 		end)
 		anim:GetMarkerReachedSignal("RStep"):Connect(function()
-			AnimFootstep(self, anim, Vector3.new(0.75, -self.p.hip_height, 0))
+			AnimFootstep(self, anim, Vector3.new(0.75, -self:GetCharacterYOff(), 0))
 		end)
 		
 		--Facial
@@ -174,7 +175,7 @@ function player_animation.LoadAnimations(self)
 	for _,v in pairs(animations:GetChildren()) do
 		if v:IsA("Animation") then
 			--Load new animation track and attach footsteps if a running animation
-			local new_anim = self.anim_controller:LoadAnimation(v)
+			local new_anim = self.hum:LoadAnimation(v)
 			AttachEvents(self, new_anim)
 			
 			--Register animation

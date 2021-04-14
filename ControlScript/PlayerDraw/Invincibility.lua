@@ -14,7 +14,7 @@ local assets = script.Parent.Parent:WaitForChild("Assets")
 local models = assets:WaitForChild("Models")
 
 --Constructor and destructor
-function draw_invincibility:New(hrp, holder)
+function draw_invincibility:New(holder)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = draw_invincibility})
 	
@@ -25,11 +25,14 @@ function draw_invincibility:New(hrp, holder)
 	self.particles = self.invincibility:WaitForChild("RootPart"):WaitForChild("Invincibility"):GetChildren()
 	self.invincibility.Parent = self.holder
 	
-	--Weld
-	local weld = Instance.new("Weld")
-	weld.Part0 = hrp
-	weld.Part1 = self.invincibility.PrimaryPart
-	weld.Parent = self.invincibility.PrimaryPart
+	--Initialize state
+	self.enabled = false
+	self.hrp_cf = nil
+	self.en_time = 0
+	self.part_time = 0
+	for _,v in pairs(self.particles) do
+		self.part_time = math.max(self.part_time, v.Lifetime.Max)
+	end
 	
 	return self
 end
@@ -45,6 +48,8 @@ function draw_invincibility:Enable()
 	for _,v in pairs(self.particles) do
 		v.Enabled = true
 	end
+	self.en_time = self.part_time
+	self.enabled = true
 end
 
 function draw_invincibility:Disable()
@@ -52,14 +57,29 @@ function draw_invincibility:Disable()
 	for _,v in pairs(self.particles) do
 		v.Enabled = false
 	end
+	self.enabled = false
 end
 
 function draw_invincibility:Draw(dt, hrp_cf)
-	
+	if not self.enabled then
+		self.en_time -= dt
+	end
+	if self.en_time > 0 and hrp_cf ~= self.hrp_cf then
+		--Set invincibility CFrame
+		self.invincibility:SetPrimaryPartCFrame(hrp_cf)
+		self.hrp_cf = hrp_cf
+	end
 end
 
 function draw_invincibility:LazyDraw(dt, hrp_cf)
-	
+	if not self.enabled then
+		self.en_time -= dt
+	end
+	if self.en_time > 0 and hrp_cf ~= self.hrp_cf then
+		--Set invincibility CFrame
+		self.invincibility:SetPrimaryPartCFrame(hrp_cf)
+		self.hrp_cf = hrp_cf
+	end
 end
 
 return draw_invincibility

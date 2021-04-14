@@ -14,7 +14,7 @@ local assets = script.Parent.Parent:WaitForChild("Assets")
 local models = assets:WaitForChild("Models")
 
 --Constructor and destructor
-function draw_shield:New(hrp, holder)
+function draw_shield:New(holder)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = draw_shield})
 	
@@ -47,15 +47,10 @@ function draw_shield:New(hrp, holder)
 		end
 	end
 	
-	--Weld
-	self.weld = Instance.new("Weld")
-	self.weld.Part0 = hrp
-	self.weld.Part1 = self.shield.PrimaryPart
-	self.weld.Parent = self.shield.PrimaryPart
-	
 	--Initialize time
 	self.time = 0
 	self.rot = CFrame.new()
+	self.hrp_cf = nil
 	
 	return self
 end
@@ -89,34 +84,30 @@ function draw_shield:Draw(dt, hrp_cf)
 	local trans3 = GetTransparency(self.time, 0.666)
 	
 	--Apply shield transparencies
-	if trans1 ~= self.trans1 then
-		for _,v in pairs(self.shield1c) do
-			v.Transparency = trans1
-		end
-		self.trans1 = trans1
+	for _,v in pairs(self.shield1c) do
+		v.Transparency = trans1
 	end
 	
-	if trans2 ~= self.trans2 then
-		for _,v in pairs(self.shield2c) do
-			v.Transparency = trans2
-		end
-		self.trans2 = trans2
+	for _,v in pairs(self.shield2c) do
+		v.Transparency = trans2
 	end
 	
-	if trans3 ~= self.trans3 then
-		for _,v in pairs(self.shield3c) do
-			v.Transparency = trans3
-		end
-		self.trans3 = trans3
+	for _,v in pairs(self.shield3c) do
+		v.Transparency = trans3
 	end
 	
 	--Set shield CFrame
 	self.rot *= CFrame.Angles(dt * 0.16, dt * 0.21, dt * 0.19)
-	self.weld.C0 = (hrp_cf - hrp_cf.p):inverse() * self.rot
+	self.shield:SetPrimaryPartCFrame(CFrame.new(hrp_cf.p) * self.rot)
+	self.hrp_cf = hrp_cf
 end
 
 function draw_shield:LazyDraw(dt, hrp_cf)
-	
+	if hrp_cf ~= self.hrp_cf then
+		--Set shield CFrame
+		self.shield:SetPrimaryPartCFrame(CFrame.new(hrp_cf.p))
+		self.hrp_cf = hrp_cf
+	end
 end
 
 return draw_shield

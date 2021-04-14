@@ -31,7 +31,7 @@ end
 
 --Normal alignment
 local function GetAligned(self, normal)
-	if self.state == "Ragdoll" then
+	if self.state == constants.state.ragdoll then
 		return self.ang
 	end
 	if self:GetUp():Dot(normal) < -0.999 then
@@ -194,7 +194,7 @@ function player_collision.Run(self)
 		local prev_mid = self:GetMiddle()
 		
 		--Wall collision heights
-		local height_scale = (self.state == "Roll") and 0.8 or 1
+		local height_scale = (self.state == constants.state.roll) and 0.8 or 1
 		local heights = {
 			self.p.height * 0.85 * self.p.scale * height_scale,
 			self.p.height * 1.25 * self.p.scale * height_scale,

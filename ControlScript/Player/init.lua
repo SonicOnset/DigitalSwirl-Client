@@ -28,7 +28,6 @@ local extra_life_jingle = global_sounds:WaitForChild("ExtraLife")
 
 local replicated_storage = game:GetService("ReplicatedStorage")
 local common_modules = replicated_storage:WaitForChild("CommonModules")
-local shared_assets = replicated_storage:WaitForChild("Assets")
 
 local switch = require(common_modules:WaitForChild("Switch"))
 local vector = require(common_modules:WaitForChild("Vector"))
@@ -52,26 +51,20 @@ local sound = require(script:WaitForChild("Sound"))
 
 local object_reference = global_reference:New(workspace, "Level/Objects")
 
-local characters = shared_assets:WaitForChild("Characters")
-
 --Common functions
 local function lerp(x, y, z)
 	return x + (y - x) * z
 end
 
 --Constructor and destructor
-function player:New(character, cframe)
+function player:New(character)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = player})
 	
-	--Initialize character
-	self.player_draw = player_draw:New(character, game:GetService("Players").LocalPlayer.Name)
-	self.character = self.player_draw.character
-	self.character_id = character
-	
-	--Get character's info
+	--Load character's info
 	local info
 	if character ~= nil then
+		self.character = character
 		info = require(self.character:WaitForChild("CharacterInfo"))
 	else
 		error("Player can't be created without character")
@@ -79,26 +72,42 @@ function player:New(character, cframe)
 	end
 	
 	--Use character's info
-	self.p = info.param
+	self.p = info.physics
 	self.assets = info.assets
 	self.animations = info.animations
 	self.portraits = info.portraits
 	
 	--Find common character references
-	self.anim_controller = self.character:WaitForChild("AnimationController")
-	self.hrp = self.character:WaitForChild("HumanoidRootPart")
+	self.hum = character:WaitForChild("Humanoid")
+	self.hrp = character:WaitForChild("HumanoidRootPart")
+	
+	--Create player draw
+	self.player_draw = player_draw:New(character)
 	
 	--Load animations and sounds
 	sound.LoadSounds(self)
 	animation.LoadAnimations(self)
 	
+	--Disable humanoid
+	local enable = {
+		[Enum.HumanoidStateType.None] = true,
+		[Enum.HumanoidStateType.Dead] = true,
+		[Enum.HumanoidStateType.Physics] = true,
+	}
+	for _,v in pairs(Enum.HumanoidStateType:GetEnumItems()) do
+		if enable[v] ~= true then
+			self.hum:SetStateEnabled(v, false)
+		end
+	end
+	self.hum:ChangeState(Enum.HumanoidStateType.Physics)
+	
 	--Use character's position and angle
-	self.pos = cframe.p
-	self.ang = self:AngleFromRbx(cframe - cframe.p)
+	self.pos = self.hrp.Position - self.hrp.CFrame.UpVector * self:GetCharacterYOff()
+	self.ang = self:AngleFromRbx(self.hrp.CFrame - self.hrp.CFrame.p)
 	self.vis_ang = self.ang
 	
 	--Initialize player state
-	self.state = "Idle"
+	self.state = constants.state.idle
 	self.spd = Vector3.new()
 	self.gspd = Vector3.new()
 	self.flag = {
@@ -195,9 +204,6 @@ function player:New(character, cframe)
 	self.music_volume = self.level_music_volume
 	self.music_reset = false
 	
-	workspace.CurrentCamera.CameraSubject = self.hrp
-	workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-	
 	return self
 end
 
@@ -225,6 +231,11 @@ function player:Destroy()
 	--Unload animations and sounds
 	animation.UnloadAnimations(self)
 	sound.UnloadSounds(self)
+end
+
+--Character functions
+function player:GetCharacterYOff()
+	return self.hum.HipHeight + self.hrp.Size.Y / 2
 end
 
 --Physics setter
@@ -350,7 +361,7 @@ end
 
 --Player state functions
 function player:IsBlinking()
-	return self.invulnerability_time > 0 and self.state ~= "Hurt" and self.state ~= "Dead"
+	return self.invulnerability_time > 0 and self.state ~= constants.state.hurt and self.state ~= constants.state.dead
 end
 
 function player:Damage(hurt_origin)
@@ -364,7 +375,7 @@ function player:Damage(hurt_origin)
 	self:ExitBall()
 	self.hurt_time = 1.5 * constants.framerate
 	self.invulnerability_time = 2.75 * constants.framerate
-	self.state = "Hurt"
+	self.state = constants.state.hurt
 	self.flag.grounded = false
 	
 	--Play hurt animation
@@ -472,19 +483,19 @@ end
 
 function player:TrailActive()
 	if self.flag.grounded then
-		return self.flag.ball_aura and self.state ~= "Spindash"
+		return self.flag.ball_aura and self.state ~= constants.state.spindash
 	else
-		return self.flag.dash_aura or self.state == "Homing" or self.state == "Bounce"
+		return self.flag.dash_aura or self.state == constants.state.homing or self.state == constants.state.bounce
 	end
 end
 
 function player:BallActive()
-	return self.flag.ball_aura or self.state == "AirKick"
+	return self.flag.ball_aura or self.state == constants.state.air_kick
 end
 
 function player:ObjectBounce()
 	--Enter airborne state
-	if self.state == "Homing" or self.state == "AirKick" then
+	if self.state == constants.state.homing or self.state == constants.state.air_kick then
 		self.flag.air_kick = true
 	end
 	if self:BallActive() then
@@ -492,7 +503,7 @@ function player:ObjectBounce()
 		self.animation = "Roll"
 		self.flag.dash_aura = false
 	end
-	self.state = "Airborne"
+	self.state = constants.state.airborne
 	self.flag.grounded = false
 	
 	--Set speed
@@ -712,9 +723,9 @@ end
 --Moves
 local function GetWalkState(self)
 	if math.abs(self.spd.X) > 0.01 then
-		return "Walk"
+		return constants.state.walk
 	else
-		return "Idle"
+		return constants.state.idle
 	end
 end
 
@@ -732,7 +743,7 @@ local function CheckJump(self)
 		
 		rail.SetRail(self, nil)
 		
-		self.state = "Airborne"
+		self.state = constants.state.airborne
 		self:EnterBall()
 		
 		--Play jump animation and sound
@@ -749,7 +760,7 @@ local function CheckSpindash(self)
 	self.roll_action = "Spindash"
 	if self.input.button_press.roll then
 		--Start spindashing
-		self.state = "Spindash"
+		self.state = constants.state.spindash
 		self:EnterBall()
 		self.spindash_speed = math.max(self.spd.X, 2)
 		sound.PlaySound(self, "SpindashCharge")
@@ -763,7 +774,7 @@ local function CheckUncurl(self)
 	self.roll_action = "Roll"
 	if self.input.button_press.roll and not self.flag.ceiling_clip then
 		--Uncurl
-		self.state = "Walk"
+		self.state = constants.state.walk
 		self:ExitBall()
 		return true
 	end
@@ -776,7 +787,7 @@ local function CheckLightSpeedDash(self, object_instance)
 	if self.input.button_press.secondary_action and lsd.CheckStartLSD(self, object_instance) then
 		--Start light speed dash
 		self.animation = "LSD"
-		self.state = "LightSpeedDash"
+		self.state = constants.state.light_speed_dash
 		self:ExitBall()
 		self:ResetObjectState()
 		return true
@@ -803,7 +814,7 @@ local function CheckHomingAttack(self, object_instance)
 			end
 			
 			--Enter homing attack state
-			self.state = "Homing"
+			self.state = constants.state.homing
 			self.homing_timer = 0
 			sound.PlaySound(self, "Dash")
 			return true
@@ -818,7 +829,7 @@ local function CheckBounce(self)
 		self.roll_action = "Bounce"
 		if self.input.button_press.roll then
 			--Bounce
-			self.state = "Bounce"
+			self.state = constants.state.bounce
 			self.animation = "Roll"
 			self.spd = vector.MulX(self.spd, 0.75)
 			if self.flag.bounce2 == true then
@@ -840,7 +851,7 @@ local function CheckAirKick(self)
 		if self.input.button_press.tertiary_action then
 			--Air kick
 			self:GiveScore(200)
-			self.state = "AirKick"
+			self.state = constants.state.air_kick
 			self:ExitBall()
 			if input.GetAnalogue_Mag(self) <= 0 then
 				self.animation = "AirKickUp"
@@ -883,7 +894,7 @@ end
 local function CheckStartWalk(self)
 	local has_control, _, _ = input.GetAnalogue(self)
 	if has_control or math.abs(self.spd.X) > self.p.slide_speed then
-		self.state = "Walk"
+		self.state = constants.state.walk
 		return true
 	end
 	return false
@@ -895,36 +906,36 @@ local function CheckStopWalk(self)
 		return false
 	end
 	
-	self.state = "Idle"
+	self.state = constants.state.idle
 	return true
 end
 
 local function CheckMoves(self, object_instance)
 	if self.do_ragdoll then
-		self.state = "Ragdoll"
+		self.state = constants.state.ragdoll
 		self.do_ragdoll = false
 		return true
 	end
 	
 	return switch(self.state, {}, {
-		["Idle"] = function()
+		[constants.state.idle] = function()
 			return CheckLightSpeedDash(self, object_instance) or CheckJump(self) or CheckSpindash(self) or CheckStartWalk(self)
 		end,
-		["Walk"] = function()
+		[constants.state.walk] = function()
 			if CheckLightSpeedDash(self, object_instance) or CheckJump(self) or CheckSpindash(self) or CheckStopWalk(self) then
 				return true
 			else
 				--Check if we should start skidding
 				if self.spd.X > self.p.jog_speed and CheckSkid(self) then
 					--Start skidding
-					self.state = "Skid"
+					self.state = constants.state.skid
 					sound.PlaySound(self, "Skid")
 					return true
 				end
 			end
 			return false
 		end,
-		["Skid"] = function()
+		[constants.state.skid] = function()
 			if CheckLightSpeedDash(self, object_instance) or CheckJump(self) or CheckSpindash(self) then
 				return true
 			else
@@ -937,7 +948,7 @@ local function CheckMoves(self, object_instance)
 			end
 			return false
 		end,
-		["Roll"] = function()
+		[constants.state.roll] = function()
 			if CheckLightSpeedDash(self, object_instance) or CheckJump(self) or CheckUncurl(self) then
 				return true
 			else
@@ -955,7 +966,7 @@ local function CheckMoves(self, object_instance)
 			end
 			return false
 		end,
-		["Spindash"] = function()
+		[constants.state.spindash] = function()
 			if CheckLightSpeedDash(self, object_instance) then
 				return true
 			else
@@ -967,7 +978,7 @@ local function CheckMoves(self, object_instance)
 					end
 				else
 					--Release spindash
-					self.state = "Roll"
+					self.state = constants.state.roll
 					self:EnterBall()
 					self.spd = vector.SetX(self.spd, self.spindash_speed)
 					sound.StopSound(self, "SpindashCharge")
@@ -977,10 +988,10 @@ local function CheckMoves(self, object_instance)
 			end
 			return false
 		end,
-		["Airborne"] = function()
+		[constants.state.airborne] = function()
 			return CheckLightSpeedDash(self, object_instance) or CheckHomingAttack(self, object_instance) or CheckBounce(self) or CheckAirKick(self)
 		end,
-		["Homing"] = function()
+		[constants.state.homing] = function()
 			if self.homing_obj == nil then
 				if CheckLightSpeedDash(self, object_instance) then
 					return true
@@ -990,18 +1001,18 @@ local function CheckMoves(self, object_instance)
 			end
 			return false
 		end,
-		["Bounce"] = function()
+		[constants.state.bounce] = function()
 			self.roll_action = "Bounce"
 			return CheckLightSpeedDash(self, object_instance) or CheckHomingAttack(self, object_instance)
 		end,
-		["LightSpeedDash"] = function()
+		[constants.state.light_speed_dash] = function()
 			self.secondary_action = "LightSpeedDash"
 			return false
 		end,
-		["AirKick"] = function()
+		[constants.state.air_kick] = function()
 			return CheckLightSpeedDash(self, object_instance)
 		end,
-		["Rail"] = function()
+		[constants.state.rail] = function()
 			self.jump_action = "Jump"
 			self.roll_action = "Crouch"
 			if self.input.button_press.jump then
@@ -1104,7 +1115,7 @@ function player:Update(object_instance)
 	
 	--Water drag
 	if self.v3 ~= true and self.flag.underwater then
-		if self.state == "Roll" then
+		if self.state == constants.state.roll then
 			self.spd = vector.AddX(self.spd, self.spd.X * -0.06)
 		else
 			self.spd = vector.AddX(self.spd, self.spd.X * -0.03)
@@ -1142,7 +1153,7 @@ function player:Update(object_instance)
 	
 	--Run character state
 	switch(self.state, {}, {
-		["Idle"] = function()
+		[constants.state.idle] = function()
 			--Movement and collision
 			movement.GetRotation(self)
 			movement.RotatedByGravity(self)
@@ -1152,7 +1163,7 @@ function player:Update(object_instance)
 			if not rail.CollideRails(self) then
 				if not self.flag.grounded then
 					--Ungrounded
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 					self.animation = "Fall"
 				else
 					--Set animation
@@ -1162,7 +1173,7 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Walk"] = function()
+		[constants.state.walk] = function()
 			--Movement and collision
 			acceleration.GetAcceleration(self)
 			collision.Run(self)
@@ -1170,7 +1181,7 @@ function player:Update(object_instance)
 			if not rail.CollideRails(self) then
 				if not self.flag.grounded then
 					--Ungrounded
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 					self.animation = "Fall"
 				else
 					--Set animation
@@ -1182,7 +1193,7 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Skid"] = function()
+		[constants.state.skid] = function()
 			--Movement and collision
 			movement.GetSkidSpeed(self)
 			collision.Run(self)
@@ -1190,7 +1201,7 @@ function player:Update(object_instance)
 			if not rail.CollideRails(self) then
 				if not self.flag.grounded then
 					--Ungrounded
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 					self.animation = "Fall"
 				else
 					--Set animation and check if should stop skidding
@@ -1198,7 +1209,7 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Spindash"] = function()
+		[constants.state.spindash] = function()
 			--Movement and collision
 			movement.GetRotation(self)
 			movement.GetSkidSpeed(self)
@@ -1207,7 +1218,7 @@ function player:Update(object_instance)
 			if not rail.CollideRails(self) then
 				if not self.flag.grounded then
 					--Ungrounded
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 					sound.StopSound(self, "SpindashCharge")
 					
 					--Set animation
@@ -1220,7 +1231,7 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Roll"] = function()
+		[constants.state.roll] = function()
 			--Movement and collision
 			movement.GetRotation(self)
 			movement.GetInertia(self)
@@ -1229,7 +1240,7 @@ function player:Update(object_instance)
 			if not rail.CollideRails(self) then
 				if not self.flag.grounded then
 					--Ungrounded
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 				end
 				
 				--Set animation
@@ -1241,7 +1252,7 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Airborne"] = function()
+		[constants.state.airborne] = function()
 			--Movement
 			acceleration.GetAirAcceleration(self)
 			if self.spring_timer <= 0 and self.dashring_timer <= 0 then
@@ -1263,7 +1274,7 @@ function player:Update(object_instance)
 							self.animation = "Idle"
 						end
 						self.spd = vector.SetX(self.spd, 0)
-						self.state = "Idle"
+						self.state = constants.state.idle
 					else
 						self.state = GetWalkState(self)
 					end
@@ -1277,7 +1288,7 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Homing"] = function()
+		[constants.state.homing] = function()
 			--Handle homing
 			local stop_homing = homing_attack.RunHoming(self, object_instance)
 			self.anim_speed = self.spd.X
@@ -1296,14 +1307,14 @@ function player:Update(object_instance)
 				else
 					--Stop homing attack if wall is hit or was told to stop
 					if stop_homing or (self.homing_obj ~= nil and self.spd.magnitude < 2.5) then
-						self.state = "Airborne"
+						self.state = constants.state.airborne
 						self:ExitBall()
 						self.animation = "Fall"
 					end
 				end
 			end
 		end,
-		["Bounce"] = function()
+		[constants.state.bounce] = function()
 			--Movement
 			acceleration.GetAirAcceleration(self)
 			
@@ -1316,7 +1327,7 @@ function player:Update(object_instance)
 				--Bounce off floor once we hit one
 				if self.flag.grounded then
 					--Unground and play sound
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 					sound.PlaySound(self, "Bounce")
 					
 					--Set upwards velocity
@@ -1334,19 +1345,19 @@ function player:Update(object_instance)
 				end
 			end
 		end,
-		["Rail"] = function()
+		[constants.state.rail] = function()
 			--Perform rail movement
 			if rail.Movement(self) then
 				--Become airborne in fall animation (came off rail)
-				self.state = "Airborne"
+				self.state = constants.state.airborne
 				self.animation = "Fall"
 			end
 		end,
-		["LightSpeedDash"] = function()
+		[constants.state.light_speed_dash] = function()
 			--Run light speed dash
 			if lsd.RunLSD(self, object_instance) then
 				--Stop light speed dash
-				self.state = "Airborne"
+				self.state = constants.state.airborne
 				self.animation = "Fall"
 			end
 			
@@ -1357,12 +1368,12 @@ function player:Update(object_instance)
 			if not rail.CollideRails(self) then
 				--Stop light speed dash if wall is hit
 				if self.spd.magnitude < 1 then
-					self.state = "Airborne"
+					self.state = constants.state.airborne
 					self.animation = "Fall"
 				end
 			end
 		end,
-		["AirKick"] = function()
+		[constants.state.air_kick] = function()
 			--Handle movement
 			local has_control, analogue_turn, analogue_mag = input.GetAnalogue(self)
 			self.spd += self.spd * Vector3.new(self.p.air_resist_air * (0.285 - analogue_mag * 0.1), self:GetAirResistY(), self.p.air_resist_z)
@@ -1390,16 +1401,16 @@ function player:Update(object_instance)
 					--Stop air kick after timer's run out or we've lost all our speed
 					self.air_kick_timer -= 1
 					if self.air_kick_timer <= 0 or self.spd.magnitude < 0.35 then
-						self.state = "Airborne"
+						self.state = constants.state.airborne
 						self.animation = "Fall"
 					end
 				end
 			end
 		end,
-		["Ragdoll"] = function()
+		[constants.state.ragdoll] = function()
 			--Run ragdoll
 			if ragdoll.Physics(self) then
-				self.state = "Airborne"
+				self.state = constants.state.airborne
 				self.animation = "Fall"
 				return
 			end
@@ -1408,7 +1419,7 @@ function player:Update(object_instance)
 			self.flag.grounded = false
 			collision.Run(self)
 		end,
-		["Hurt"] = function()
+		[constants.state.hurt] = function()
 			--Handle movement
 			movement.GetInertia(self)
 			
@@ -1428,22 +1439,22 @@ function player:Update(object_instance)
 					--Exit hurt state after cooldown
 					self.hurt_time = math.max(self.hurt_time - 1, 0)
 					if self.hurt_time <= 0 then
-						self.state = "Airborne"
+						self.state = constants.state.airborne
 						self.animation = "Fall"
 					end
 				end
 			end
 		end,
-		["Dead"] = function()
+		[constants.state.dead] = function()
 			
 		end,
-		["Drown"] = function()
+		[constants.state.drown] = function()
 			
 		end,
 	})
 	
 	--Get portrait to use
-	if self.state == "Hurt" or self.state == "Dead" then
+	if self.state == constants.state.hurt or self.state == constants.state.dead then
 		self.portrait = "Hurt"
 	else
 		self.portrait = "Idle"
@@ -1451,6 +1462,15 @@ function player:Update(object_instance)
 	
 	--Increment game time
 	self.time += 1 / constants.framerate
+	
+	--TEMP: Die when below death barrier
+	if self.pos.Y <= workspace.FallenPartsDestroyHeight then
+		self.hum.Health = 0
+	end
+	if self.hum.Health <= 0 and not self.dead_debounce then
+		self.dead_debounce = true
+		replicated_storage:WaitForChild("LoadCharacter"):FireServer()
+	end
 	
 	debug.profileend()
 end
@@ -1464,11 +1484,11 @@ function player:Draw(dt)
 	animation.DynTilt(self, dt)
 	
 	--Get character position
-	local balance = self.state == "Rail" and self.rail_balance or 0
-	local off = self.state == "Rail" and self.rail_off or Vector3.new()
+	local balance = self.state == constants.state.rail and self.rail_balance or 0
+	local off = self.state == constants.state.rail and self.rail_off or Vector3.new()
 	self.vis_ang = (self:AngleToRbx(self.ang) * CFrame.Angles(0, 0, -balance)):Lerp(self.vis_ang, (0.675 ^ 60) ^ dt)
 	
-	local hrp_cframe = (self.vis_ang + self.pos + off) + (self.vis_ang.UpVector * self.p.hip_height)
+	local hrp_cframe = (self.vis_ang + self.pos + off) + (self.vis_ang.UpVector * self:GetCharacterYOff())
 	
 	--Set Player Draw state
 	local ball_form, ball_spin
@@ -1485,6 +1505,9 @@ function player:Draw(dt)
 	
 	self.player_draw:Draw(dt, hrp_cframe, ball_form, ball_spin, self:TrailActive(), self.shield, self.invincibility_time > 0, self:IsBlinking())
 	
+	--Update sound source
+	sound.UpdateSource(self)
+	
 	--Speed trail
 	--if math.abs(self.spd.X) >= (self.p.rush_speed + self.p.crash_speed) / 2 then
 	--	self.speed_trail.Enabled = true
@@ -1494,37 +1517,37 @@ function player:Draw(dt)
 	--end
 	
 	--Rail speed trail
-	local rail_speed_trail_active = (rail.GrindActive(self) and math.abs(self.spd.X) >= self.p.crash_speed)
-	if rail_speed_trail_active ~= self.rail_speed_trail_active then
-		self.rail_speed_trail.Enabled = rail_speed_trail_active
-		self.rail_speed_trail_active = rail_speed_trail_active
+	if rail.GrindActive(self) and math.abs(self.spd.X) >= self.p.crash_speed then
+		self.rail_speed_trail.Enabled = true
+	else
+		self.rail_speed_trail.Enabled = false
 	end
 	
 	--Air kick trails
-	local air_kick_trails_active = self.animation == "AirKick"
-	if air_kick_trails_active ~= self.air_kick_trails_active then
+	if self.animation == "AirKick" then
 		for _,v in pairs(self.air_kick_trails) do
-			v.Enabled = air_kick_trails_active
+			v.Enabled = true
 		end
-		self.air_kick_trails_active = air_kick_trails_active
+	else
+		for _,v in pairs(self.air_kick_trails) do
+			v.Enabled = false
+		end
 	end
 	
 	--Skid trail
-	local skid_effect_active = self.animation == "Skid"
-	if skid_effect_active ~= self.skid_effect_active then
-		self.skid_effect.Enabled = skid_effect_active
-		self.skid_effect_active = skid_effect_active
+	if self.animation == "Skid" then
+		self.skid_effect.Enabled = true
+	else
+		self.skid_effect.Enabled = false
 	end
 	
 	--Rail sparks
-	local rail_sparks_active = (rail.GrindActive(self) and math.abs(self.spd.X) >= self.p.run_speed)
-	if rail_sparks_active ~= self.rail_sparks_active then
-		self.rail_sparks.Enabled = rail_sparks_active
-		self.rail_sparks_active = rail_sparks_active
-	end
-	if rail_sparks_active then
+	if rail.GrindActive(self) and math.abs(self.spd.X) >= self.p.run_speed then
+		self.rail_sparks.Enabled = true
 		self.rail_sparks.Rate = math.abs(self.spd.X) * 90
 		self.rail_sparks.EmissionDirection = (self.spd.X >= 0) and Enum.NormalId.Back or Enum.NormalId.Front
+	else
+		self.rail_sparks.Enabled = false
 	end
 	
 	debug.profileend()

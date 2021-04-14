@@ -11,7 +11,7 @@ Author(s): Regan "CuckyDev/TheGreenDeveloper" Green
 local draw_jump_ball = {}
 
 --Constructor and destructor
-function draw_jump_ball:New(hrp, holder, models)
+function draw_jump_ball:New(holder, models)
 	--Initialize meta reference
 	local self = setmetatable({}, {__index = draw_jump_ball})
 	
@@ -19,18 +19,11 @@ function draw_jump_ball:New(hrp, holder, models)
 	self.holder = holder
 	
 	self.jump_ball = models:WaitForChild("JumpBall"):clone()
-	self.jump_ball.Parent = holder
-	
-	self.jump_ball_char = self.jump_ball:WaitForChild("Character")
 	self.jump_ball_smear = self.jump_ball:WaitForChild("Smear")
-	self.jump_ball_char.Transparency = 1
-	self.jump_ball_smear.Transparency = 1
 	
-	--Weld
-	self.weld = Instance.new("Weld")
-	self.weld.Part0 = hrp
-	self.weld.Part1 = self.jump_ball.PrimaryPart
-	self.weld.Parent = self.jump_ball.PrimaryPart
+	--Initialize state
+	self.spin = 0
+	self.hrp_cf = nil
 	
 	return self
 end
@@ -42,27 +35,34 @@ end
 
 --Interface
 function draw_jump_ball:Enable()
-	--Show jump ball
-	self.jump_ball_char.Transparency = 0
+	--Set parent
+	self.jump_ball.Parent = self.holder
 end
 
 function draw_jump_ball:Disable()
-	--Hide jump ball
-	self.jump_ball_char.Transparency = 1
-	self.jump_ball_smear.Transparency = 1
+	--Set parent
+	self.jump_ball.Parent = nil
 end
 
 function draw_jump_ball:Draw(dt, hrp_cf, spin)
-	--Modify jump ball smear transparency
-	local smear = math.clamp((math.abs(spin) - 20) / 45, 0, 1)
-	self.jump_ball_smear.Transparency = 1 - smear
-	
-	--Spin jumpball
-	self.weld.C0 *= CFrame.fromAxisAngle(Vector3.new(-1, 0, 0), spin * dt)
+	if hrp_cf ~= self.hrp_cf then
+		--Modify jump ball smear transparency
+		local smear = math.clamp((math.abs(spin) - 20) / 50, 0, 1)
+		self.jump_ball_smear.Transparency = 1 - smear
+		
+		--Set jump ball CFrame
+		self.spin += spin * dt
+		self.jump_ball:SetPrimaryPartCFrame(hrp_cf * CFrame.Angles(-self.spin, 0, 0))
+		self.hrp_cf = hrp_cf
+	end
 end
 
 function draw_jump_ball:LazyDraw(dt, hrp_cf, spin)
-	
+	if hrp_cf ~= self.hrp_cf then
+		--Set jump ball CFrame
+		self.jump_ball:SetPrimaryPartCFrame(hrp_cf)
+		self.hrp_cf = hrp_cf
+	end
 end
 
 return draw_jump_ball

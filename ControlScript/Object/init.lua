@@ -50,7 +50,7 @@ end
 
 local function DestroyObject(self, v)
 	--Check if object is currently registered
-	if self.objects ~= nil and self.objects[v] ~= nil then
+	if self.objects ~= nil and self.objects[v] then
 		--Deregister object root
 		local root = self.objects[v].root
 		if root ~= nil then
@@ -141,8 +141,8 @@ function object_class:Destroy()
 	
 	--Destroy all objects
 	if self.objects ~= nil then
-		for i,_ in pairs(self.objects) do
-			DestroyObject(self, i)
+		for _,v in pairs(self.objects) do
+			v:Destroy()
 		end
 		self.objects = nil
 	end

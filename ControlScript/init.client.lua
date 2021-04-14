@@ -18,13 +18,6 @@ local guis = assets:WaitForChild("Guis")
 
 local constants = require(script:WaitForChild("Constants"))
 
---Test settings
-_G.SOA = {
-	settings = {
-		player_visibility = "None",
-	},
-}
-
 --Debug display
 local debug_gui = Instance.new("ScreenGui")
 debug_gui.IgnoreGuiInset = false
@@ -88,7 +81,7 @@ set_physics.OnClientEvent:Connect(function(game, char)
 end)
 
 --Character added event
-function Start(character, cframe)
+function CharacterAdded(character)
 	--Destroy previous game objects
 	if player_object then
 		player_object:Destroy()
@@ -100,7 +93,7 @@ function Start(character, cframe)
 	end
 	
 	--Create new player object for our character
-	player_object = player_class:New(character, cframe)
+	player_object = player_class:New(character)
 	if player_object == nil then
 		error("Failed to create player object")
 	end
@@ -122,11 +115,32 @@ function Start(character, cframe)
 	end
 end
 
+function CharacterRemoving(character)
+	--Destroy previous game objects
+	if music_instance ~= nil then
+		music_instance:Destroy()
+		music_instance = nil
+	end
+	if player_object ~= nil then
+		player_object:Destroy()
+		player_object = nil
+	end
+	if object_instance ~= nil then
+		object_instance:Destroy()
+		object_instance = nil
+	end
+end
+
 --Game initialization
 player_replicate_instance = player_replicate_class:New()
 hud_instance = hud_class:New(player:WaitForChild("PlayerGui"))
 
-Start("Sonic", CFrame.new(0, 10, 0))
+--Attach character creation and destruction events
+if player.Character then
+	CharacterAdded(player.Character)
+end
+player.CharacterAdded:Connect(CharacterAdded)
+player.CharacterRemoving:Connect(CharacterRemoving)
 
 --Game update
 local next_tick = tick()
@@ -184,6 +198,9 @@ run_service:BindToRenderStep("ControlScript_CharacterUpdate", Enum.RenderPriorit
 	if player_object ~= nil then
 		--Draw player
 		player_object:Draw(dt)
+		
+		--Update Hud display
+		hud_instance:UpdateDisplay(dt, player_object)
 	end
 	
 	if object_instance ~= nil then
@@ -191,22 +208,17 @@ run_service:BindToRenderStep("ControlScript_CharacterUpdate", Enum.RenderPriorit
 		object_instance:Draw(dt)
 	end
 	
-	if hud_instance ~= nil and player_object ~= nil then
-		--Update Hud display
-		hud_instance:UpdateDisplay(dt, player_object)
-	end
-	
 	--Handle player replication
 	if player_replicate_instance ~= nil then
-		if player_object ~= nil then
-			player_replicate_instance:UpdateSelf(player_object)
+		if player_object ~= nil and player_object.player_draw ~= nil then
+			player_replicate_instance:UpdateSelf(player_object.player_draw)
 		end
 		player_replicate_instance:UpdatePeers(dt)
 	end
 end)
 
 --Debug display
-local debug_page = nil
+local debug_enabled = false
 
 local function NumberString(x)
 	if typeof(x) == "number" then
@@ -258,16 +270,10 @@ uis.InputBegan:Connect(function(input, game_processed)
 	if uis:GetFocusedTextBox() == nil and not game_processed then
 		if input.UserInputType == Enum.UserInputType.Keyboard and uis:IsKeyDown(Enum.KeyCode.L) then
 			if input.KeyCode == Enum.KeyCode.Zero then
-				if debug_page ~= 0 then
-					debug_page = 0
-				else
-					debug_page = nil
-				end
+				debug_enabled = not debug_enabled
 			elseif input.KeyCode == Enum.KeyCode.One then
-				if debug_page ~= 1 then
-					debug_page = 1
-				else
-					debug_page = nil
+				if player_object ~= nil then
+					RecPrint({player_object=player_object}, 0)
 				end
 			end
 		end
@@ -293,7 +299,7 @@ run_service:BindToRenderStep("ControlScript_DebugDisplay", Enum.RenderPriority.L
 	table.insert(labels, "  "..NumberString(cur_fps).." FPS")
 	table.insert(labels, "  "..NumberString(cur_tps).." TPS")
 	
-	if debug_page == 0 then
+	if debug_enabled then
 		--Player display
 		table.insert(labels, "-Player-")
 		if player_object ~= nil then
@@ -313,7 +319,6 @@ run_service:BindToRenderStep("ControlScript_DebugDisplay", Enum.RenderPriority.L
 			
 			--Power-up display
 			table.insert(labels, "  - Power-up -")
-			table.insert(labels, "    Shield "..tostring(player_object.shield))
 			table.insert(labels, "    Speed Shoes Time "..NumberString(player_object.speed_shoes_time))
 			table.insert(labels, "    Invincibility Time "..NumberString(player_object.invincibility_time))
 			
@@ -325,48 +330,51 @@ run_service:BindToRenderStep("ControlScript_DebugDisplay", Enum.RenderPriority.L
 			end
 			
 			--State display
-			table.insert(labels, "  -State "..tostring(player_object.state).."-")
+			local state_name = "invalid"
+			for i,v in pairs(constants.state) do
+				if player_object.state == v then
+					state_name = i
+				end
+			end
+			table.insert(labels, "  -State "..state_name.."-")
 			
-			if player_object.state == "Walk" or player_object.state == "Roll" then
+			if player_object.state == constants.state.walk or player_object.state == constants.state.roll then
 				--Walking / rolling display
 				table.insert(labels, "    Dash Panel Timer "..NumberString(player_object.dashpanel_timer))
-			elseif player_object.state == "Airborne" then
+			elseif player_object.state == constants.state.airborne then
 				--Airborne display
 				table.insert(labels, "    Jump Timer "..NumberString(player_object.jump_timer))
 				table.insert(labels, "    Spring Timer "..NumberString(player_object.spring_timer))
 				table.insert(labels, "    Dash Ring Timer "..NumberString(player_object.dashring_timer))
 				table.insert(labels, "    Rail Trick "..NumberString(player_object.rail_trick))
-			elseif player_object.state == "Spindash" then
+			elseif player_object.state == constants.state.spindash then
 				--Spindash display
 				table.insert(labels, "    Spindash Speed "..NumberString(player_object.spindash_speed))
-			elseif player_object.state == "Rail" then
+			elseif player_object.state == constants.state.rail then
 				--Rail display
 				table.insert(labels, "    Rail Dir "..NumberString(player_object.rail_dir))
 				table.insert(labels, "    Balance "..NumberString(math.deg(player_object.rail_balance)))
 				table.insert(labels, "    Target Balance "..NumberString(math.deg(player_object.rail_tgt_balance)))
 				table.insert(labels, "    Grace "..NumberString(player_object.rail_grace))
 				table.insert(labels, "    Bonus Time "..NumberString(player_object.rail_bonus_time))
-			elseif player_object.state == "Bounce" then
+			elseif player_object.state == constants.state.bounce then
 				--Bounce display
 				table.insert(labels, "    Second Bounce "..BoolString(player_object.flag.bounce2))
-			elseif player_object.state == "Homing" then
+			elseif player_object.state == constants.state.homing then
 				--Homing attack display
 				table.insert(labels, "    Target "..PointerString(player_object.homing_obj))
 				table.insert(labels, "    Homing Timer "..NumberString(player_object.homing_timer))
-			elseif player_object.state == "LightSpeedDash" then
+			elseif player_object.state == constants.state.light_speed_dash then
 				--Light speed dash display
 				table.insert(labels, "    Target "..PointerString(player_object.lsd_obj))
-			elseif player_object.state == "AirKick" then
+			elseif player_object.state == constants.state.air_kick then
 				--Air kick display
 				table.insert(labels, "    Air Kick Timer "..NumberString(player_object.air_kick_timer))
-			elseif player_object.state == "Ragdoll" then
+			elseif player_object.state == constants.state.ragdoll then
 				--Ragdoll display
 				table.insert(labels, "    Ragdoll Timer "..NumberString(player_object.ragdoll_time))
 			end
 		end
-	elseif debug_page == 1 then
-		--Game stats
-		table.insert(labels, "-Stats-")
 	end
 	
 	--Destroy or allocate new labels

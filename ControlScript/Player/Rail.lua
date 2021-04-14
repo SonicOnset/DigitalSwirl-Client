@@ -14,6 +14,7 @@ local replicated_storage = game:GetService("ReplicatedStorage")
 local common_modules = replicated_storage:WaitForChild("CommonModules")
 
 local input = require(script.Parent:WaitForChild("Input"))
+local constants = require(script.Parent.Parent:WaitForChild("Constants"))
 local vector = require(common_modules:WaitForChild("Vector"))
 local collision = require(common_modules:WaitForChild("Collision"))
 local spatial_partitioning = require(common_modules:WaitForChild("SpatialPartitioning"))
@@ -163,7 +164,7 @@ function player_rail.SetRail(self, rail)
 			--Set player state
 			self:ResetObjectState()
 			self:Land()
-			self.state = "Rail"
+			self.state = constants.state.rail
 			
 			--Set rail state
 			self.rail = rail
@@ -235,11 +236,11 @@ function player_rail.CollideRails(self)
 	end
 	
 	debug.profileend()
-	return self.state == "Rail"
+	return self.state == constants.state.rail
 end
 
 function player_rail.GrindActive(self)
-	return self.state == "Rail" and self.rail_off.magnitude < 0.5
+	return self.state == constants.state.rail and self.rail_off.magnitude < 0.5
 end
 
 function player_rail.CheckSwitch(self)
@@ -309,7 +310,7 @@ function player_rail.CheckTrick(self)
 		--Jump off
 		player_rail.SetRail(self, nil)
 		self.rail_debounce = 30
-		self.state = "Airborne"
+		self.state = constants.state.airborne
 		self.flag.air_kick = true
 		if self.spd.X < 0 then
 			self:Turn(math.pi)
