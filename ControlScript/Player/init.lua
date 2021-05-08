@@ -648,8 +648,8 @@ function player:AdjustAngleY(turn)
 	--Handle inertia
 	if self.v3 ~= true then
 		if not self.flag.grounded then
-			--10% inertia
-			self.spd = self.spd * 0.9 + self:ToLocal(prev_spd) * 0.1
+			--90% inertia
+			self.spd = self.spd * 0.1 + self:ToLocal(prev_spd) * 0.9
 		else
 			local inertia
 			if has_control then
